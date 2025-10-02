@@ -15,7 +15,7 @@
 
 1. Instale a extensão <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> no seu navegador.
 2. Clique no ícone do Tampermonkey e selecione <b>"Criar um novo script"</b>.
-3. Apague todo o conteúdo padrão e cole o conteúdo de <code>KrunkerCheats/cheat.js</code> deste repositório.
+3. Apague todo o conteúdo padrão e cole o conteúdo de <code>KrunkerCheats/krunker.io-cheat2025.js</code> deste repositório.
 4. Salve o script.
 5. Acesse <a href="https://krunker.io/" target="_blank">Krunker.io</a> e aproveite!
 
