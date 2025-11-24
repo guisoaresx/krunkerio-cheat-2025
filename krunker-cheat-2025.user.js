@@ -2,7 +2,7 @@
 // @name         KRUNKER - GuiSoares_X - Enhanced
 // @namespace    http://tampermonkey.net/
 // @version      0.5.0
-// @description  ESP + Aimbot + Chams + TriggerBot + NoRecoil + BunnyHop + HUD + localStorage (Hotkeys: B/L/T/G/F/M/N/K/C/P/J/V/O/H/X/I/U/Y/R)
+// @description  ESP + Aimbot + Chams + TriggerBot + NoRecoil + BunnyHop + HUD + localStorage (Hotkeys: B/L/T/G/F/M/N/K/C/P/J/V/O/H/X/I)
 // @author       IG: GuiSoares_x (zTheMonio/Deus²²)
 // @match        *://krunker.io/*
 // @match        *://browserfps.com/*
@@ -25,9 +25,6 @@ const settings = {
     aimbotOnRightMouse: false,
     espEnabled: false,
     espLines: false,
-    espHealth: false,
-    espDistance: false,
-    espNames: false,
     wireframe: false,
     chams: false,
     chamsEnemy: 0xff00cc,
@@ -37,11 +34,11 @@ const settings = {
     recoilComp: false,
     recoilCompFactor: 0.7,
     autoBhop: false,
-    showWatermark: true,  // Ativado por padrão
+    showWatermark: true,
     panicMode: false
 };
 
-// Sistema de persistência com localStorage
+
 const SETTINGS_KEY = 'krunker_cheat_settings_v1';
 
 function loadSettings() {
@@ -54,10 +51,10 @@ function loadSettings() {
                     settings[key] = parsed[key];
                 }
             });
-            x.consoleLog('⚙️ Configurações carregadas do localStorage');
+            x.consoleLog('Configurações carregadas do localStorage');
         }
     } catch (e) {
-        x.consoleLog('⚠️ Erro ao carregar configurações:', e);
+        x.consoleLog('Erro ao carregar configurações:', e);
     }
 }
 
@@ -65,7 +62,7 @@ function saveSettings() {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch (e) {
-        x.consoleLog('⚠️ Erro ao salvar configurações:', e);
+        x.consoleLog('Erro ao salvar configurações:', e);
     }
 }
 
@@ -76,9 +73,6 @@ const keyToSetting = {
     KeyL: 'aimbotOnRightMouse',
     KeyM: 'espEnabled',
     KeyN: 'espLines',
-    KeyU: 'espHealth',
-    KeyY: 'espDistance',
-    KeyR: 'espNames',
     KeyK: 'wireframe',
     KeyC: 'chams',
     KeyP: 'recoilComp',
@@ -108,7 +102,6 @@ const x = {
 
 x.consoleLog('Waiting to inject...');
 
-// Carregar configurações salvas
 loadSettings();
 
 const proxied = function (object) {
@@ -144,7 +137,7 @@ const material = new THREE.RawShaderMaterial({
     	`,
     fragmentShader: `
     	void main() {
-    		gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );  // Vermelho
+    		gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );
     	}
     	`,
     depthTest: false,
@@ -163,7 +156,6 @@ let rightMouseDown = false;
 let spaceHeld = false;
 let bhopTimer = null;
 
-// Watermark tracking
 let watermarkEl = null;
 let fps = 0;
 let frameCount = 0;
@@ -335,9 +327,6 @@ el.innerHTML = `<style>
   <h4>Extras</h4>
   <div><span class="key">X</span> PANIC MODE (Desativa tudo)</div>
   <div><span class="key">I</span> Mostrar/Ocultar Watermark</div>
-  <div><span class="key">U</span> ESP Health Bars</div>
-  <div><span class="key">Y</span> ESP Distância</div>
-  <div><span class="key">R</span> ESP Nomes</div>
   <div style="text-align:center;color:#aaa;margin-top:10px;">Desenvolvido por zTheMonio</div>
 </div>
 <div class="zui" style="display:none;">
