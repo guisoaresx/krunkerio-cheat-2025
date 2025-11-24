@@ -24,7 +24,6 @@ const settings = {
     aimFov: 45,
     aimbotOnRightMouse: false,
     espEnabled: false,
-    espLines: false,
     wireframe: false,
     chams: false,
     chamsEnemy: 0xff00cc,
@@ -72,7 +71,6 @@ const keyToSetting = {
     KeyB: 'aimbotEnabled',
     KeyL: 'aimbotOnRightMouse',
     KeyM: 'espEnabled',
-    KeyN: 'espLines',
     KeyK: 'wireframe',
     KeyC: 'chams',
     KeyP: 'recoilComp',
@@ -145,11 +143,7 @@ const material = new THREE.RawShaderMaterial({
     transparent: false
 });
 
-const line = new THREE.LineSegments(new THREE.BufferGeometry(), material.clone());
-line.frustumCulled = false;
 
-const linePositions = new THREE.BufferAttribute(new Float32Array(100 * 2 * 3), 3);
-line.geometry.setAttribute('position', linePositions);
 
 let injectTimer = null;
 let rightMouseDown = false;
@@ -160,13 +154,12 @@ let watermarkEl = null;
 let fps = 0;
 let frameCount = 0;
 let lastFpsTime = performance.now();
-let killCount = 0;
 
 function lerp(start, end, t) {
     return start * (1 - t) + end * t;
 }
 
-// Easing curve para movimento mais natural
+
 function easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
 }
@@ -217,7 +210,13 @@ function applyChamsToPlayer(player) {
                     try { node.material.transparent = true; node.material.opacity = 0.95; } catch (e) { }
                 } catch (e) { }
             } else {
-                try { node.material.transparent = false; node.material.opacity = 1; } catch (e) { }
+                try {
+                    node.material.transparent = false;
+                    node.material.opacity = 1;
+                    if (node.material.color) {
+                        node.material.color.setHex(0xffffff);
+                    }
+                } catch (e) { }
             }
             try { node.material.needsUpdate = true; } catch (e) { }
         });
@@ -344,7 +343,6 @@ function createWatermark() {
     wm.innerHTML = `
         <div class="wm-row"><span class="wm-label">FPS:</span><span class="wm-value" id="wm-fps">0</span></div>
         <div class="wm-row"><span class="wm-label">Players:</span><span class="wm-value" id="wm-players">0</span></div>
-        <div class="wm-row"><span class="wm-label">Kills:</span><span class="wm-value" id="wm-kills">0</span></div>
         <div class="wm-row"><span class="wm-label">Status:</span><span class="wm-value" id="wm-status" style="color:#7CFFB2">ATIVO</span></div>
     `;
     return wm;
@@ -366,12 +364,10 @@ function updateWatermark(playerCount) {
         // Atualizar display com safe checks
         const fpsEl = document.getElementById('wm-fps');
         const playersEl = document.getElementById('wm-players');
-        const killsEl = document.getElementById('wm-kills');
         const statusEl = document.getElementById('wm-status');
 
         if (fpsEl) fpsEl.textContent = fps || 0;
         if (playersEl) playersEl.textContent = playerCount || 0;
-        if (killsEl) killsEl.textContent = killCount || 0;
 
         if (statusEl) {
             const anyActive = settings.aimbotEnabled || settings.espEnabled || settings.chams || settings.triggerBot;
@@ -633,7 +629,6 @@ function animate() {
 
     window.myPlayer = myPlayer;
 
-    let counter = 0;
     let targetPlayer;
     let minScreenDistance = Infinity;  // Mudado para distância da tela
 
@@ -669,19 +664,9 @@ function animate() {
             player.box = box;
         }
 
-        if (player.position.x === myPlayer.position.x && player.position.z === myPlayer.position.z) {
-            player.box.visible = false;
-            if (line.parent !== player) {
-                player.add(line);
-            }
-            continue;
-        }
 
-        linePositions.setXYZ(counter++, 0, 10, -5);
-        tempVector.copy(player.position);
-        tempVector.y += 9;
-        tempVector.applyMatrix4(tempObject.matrix);
-        linePositions.setXYZ(counter++, tempVector.x, tempVector.y, tempVector.z);
+
+
 
         player.visible = settings.espEnabled || player.visible;
         player.box.visible = settings.espEnabled;
@@ -730,9 +715,7 @@ function animate() {
         // Silenciosamente ignorar erros de watermark
     }
 
-    linePositions.needsUpdate = true;
-    line.geometry.setDrawRange(0, counter);
-    line.visible = settings.espLines;
+
 
     tryZeroWeaponSpread();
 
