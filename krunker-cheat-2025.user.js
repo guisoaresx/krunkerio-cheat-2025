@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         KRUNKER - GuiSoares_X - Finalizado
+// @name         KRUNKER - GuiSoares_X - Enhanced
 // @namespace    http://tampermonkey.net/
-// @version      0.4.3
-// @description  ESP + Aimbot + Chams + TriggerBot + NoRecoil + BunnyHop + HUD (Hotkeys: B/L/T/G/F/M/N/K/C/P/J/V/O/H)
+// @version      0.5.0
+// @description  ESP + Aimbot + Chams + TriggerBot + NoRecoil + BunnyHop + HUD + localStorage (Hotkeys: B/L/T/G/F/M/N/K/C/P/J/V/O/H/X/I/U/Y/R)
 // @author       IG: GuiSoares_x (zTheMonio/Deus²²)
 // @match        *://krunker.io/*
 // @match        *://browserfps.com/*
@@ -25,6 +25,9 @@ const settings = {
     aimbotOnRightMouse: false,
     espEnabled: false,
     espLines: false,
+    espHealth: false,
+    espDistance: false,
+    espNames: false,
     wireframe: false,
     chams: false,
     chamsEnemy: 0xff00cc,
@@ -33,8 +36,38 @@ const settings = {
     triggerThreshold: 6,
     recoilComp: false,
     recoilCompFactor: 0.7,
-    autoBhop: false
+    autoBhop: false,
+    showWatermark: false,
+    panicMode: false
 };
+
+// Sistema de persistência com localStorage
+const SETTINGS_KEY = 'krunker_cheat_settings_v1';
+
+function loadSettings() {
+    try {
+        const saved = localStorage.getItem(SETTINGS_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            Object.keys(parsed).forEach(key => {
+                if (settings.hasOwnProperty(key) && typeof settings[key] === typeof parsed[key]) {
+                    settings[key] = parsed[key];
+                }
+            });
+            x.consoleLog('⚙️ Configurações carregadas do localStorage');
+        }
+    } catch (e) {
+        x.consoleLog('⚠️ Erro ao carregar configurações:', e);
+    }
+}
+
+function saveSettings() {
+    try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+        x.consoleLog('⚠️ Erro ao salvar configurações:', e);
+    }
+}
 
 const aimbotTargets = ['body', 'nut', 'head'];
 
@@ -43,11 +76,15 @@ const keyToSetting = {
     KeyL: 'aimbotOnRightMouse',
     KeyM: 'espEnabled',
     KeyN: 'espLines',
+    KeyU: 'espHealth',
+    KeyY: 'espDistance',
+    KeyR: 'espNames',
     KeyK: 'wireframe',
     KeyC: 'chams',
     KeyP: 'recoilComp',
     KeyJ: 'autoBhop',
-    KeyV: 'triggerBot'
+    KeyV: 'triggerBot',
+    KeyI: 'showWatermark'
 };
 
 let gui = createGUI();
@@ -71,7 +108,10 @@ const x = {
 
 x.consoleLog('Waiting to inject...');
 
-const proxied = function(object) {
+// Carregar configurações salvas
+loadSettings();
+
+const proxied = function (object) {
     try {
         if (typeof object === 'object' &&
             typeof object.parent === 'object' &&
@@ -82,7 +122,7 @@ const proxied = function(object) {
             scene = object.parent;
             x.ArrayPrototype.push = x.ArrayPush;
         }
-    } catch (error) {}
+    } catch (error) { }
     return x.ArrayPush.apply(this, arguments);
 }
 
@@ -120,8 +160,20 @@ let rightMouseDown = false;
 let spaceHeld = false;
 let bhopTimer = null;
 
+// Watermark tracking
+let watermarkEl = null;
+let fps = 0;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let killCount = 0;
+
 function lerp(start, end, t) {
     return start * (1 - t) + end * t;
+}
+
+// Easing curve para movimento mais natural
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
 }
 
 function getGameCanvas() {
@@ -147,7 +199,7 @@ function triggerShot() {
             try {
                 document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
                 setTimeout(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 })), 10);
-            } catch (e2) {}
+            } catch (e2) { }
         }
     }
 }
@@ -156,10 +208,10 @@ function applyChamsToPlayer(player) {
     try {
         player.traverse(node => {
             if (!node || !node.material) return;
-            try { node.material.wireframe = settings.wireframe; } catch (e) {}
-            try { node.material.depthTest = !settings.chams ? true : false; } catch (e) {}
-            try { node.material.depthWrite = !settings.chams ? true : false; } catch (e) {}
-            try { node.renderOrder = settings.chams ? 9999 : 0; } catch (e) {}
+            try { node.material.wireframe = settings.wireframe; } catch (e) { }
+            try { node.material.depthTest = !settings.chams ? true : false; } catch (e) { }
+            try { node.material.depthWrite = !settings.chams ? true : false; } catch (e) { }
+            try { node.renderOrder = settings.chams ? 9999 : 0; } catch (e) { }
             if (settings.chams) {
                 try {
                     if (myPlayer && myPlayer.team !== undefined && player.team !== undefined && myPlayer.team === player.team) {
@@ -167,14 +219,14 @@ function applyChamsToPlayer(player) {
                     } else {
                         node.material.color && node.material.color.setHex(settings.chamsEnemy);
                     }
-                    try { node.material.transparent = true; node.material.opacity = 0.95; } catch (e) {}
-                } catch (e) {}
+                    try { node.material.transparent = true; node.material.opacity = 0.95; } catch (e) { }
+                } catch (e) { }
             } else {
-                try { node.material.transparent = false; node.material.opacity = 1; } catch (e) {}
+                try { node.material.transparent = false; node.material.opacity = 1; } catch (e) { }
             }
-            try { node.material.needsUpdate = true; } catch (e) {}
+            try { node.material.needsUpdate = true; } catch (e) { }
         });
-    } catch (e) {}
+    } catch (e) { }
 }
 
 function tryZeroWeaponSpread() {
@@ -187,7 +239,7 @@ function tryZeroWeaponSpread() {
                     if (typeof myPlayer.weapon.spread !== 'undefined') myPlayer.weapon.spread = 0;
                 }
             }
-        } catch (e) {}
+        } catch (e) { }
         try {
             const camRoot = myPlayer.children && myPlayer.children[0];
             if (camRoot && camRoot.weapon) {
@@ -196,14 +248,14 @@ function tryZeroWeaponSpread() {
                     if (typeof camRoot.weapon.spread !== 'undefined') camRoot.weapon.spread = 0;
                 }
             }
-        } catch (e) {}
+        } catch (e) { }
         try {
             if (settings.recoilComp && myPlayer && myPlayer.children && myPlayer.children[0]) {
                 const cam = myPlayer.children[0];
                 cam.rotation.x = lerp(cam.rotation.x, 0, settings.recoilCompFactor * 0.45);
             }
-        } catch (e) {}
-    } catch (e) {}
+        } catch (e) { }
+    } catch (e) { }
 }
 
 function handleBhopState() {
@@ -215,12 +267,12 @@ function handleBhopState() {
         bhopTimer = setInterval(() => {
             try {
                 const cvs = getGameCanvas();
-                try { cvs && cvs.focus && cvs.focus(); } catch (e) {}
-                const kd = new KeyboardEvent('keydown', {key: ' ', code: 'Space', bubbles: true});
-                const ku = new KeyboardEvent('keyup', {key: ' ', code: 'Space', bubbles: true});
+                try { cvs && cvs.focus && cvs.focus(); } catch (e) { }
+                const kd = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true });
+                const ku = new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true });
                 window.dispatchEvent(kd);
                 setTimeout(() => window.dispatchEvent(ku), 30);
-            } catch (e) {}
+            } catch (e) { }
         }, 160);
     }
 }
@@ -251,6 +303,10 @@ el.innerHTML = `<style>
 .zui-item .zui-item-value { font-weight: 700; font-size: 13px; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); color:#fff; }
 .zui-item.text { justify-content:center; color:#bbb; padding: 10px; }
 .gsm7-msg { position: fixed; left: 10px; bottom: 10px; z-index: 999999; background: rgba(0,0,0,0.6); color: #fff; padding: 10px 12px; border-radius: 6px; font-weight: 700; }
+.watermark { position: fixed; left: 10px; top: 10px; z-index: 999998; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); padding: 10px 14px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 12px; color: #00FFAA; line-height: 1.7; border: 1px solid rgba(0,255,170,0.25); display: none; }
+.watermark .wm-row { display: flex; align-items: center; margin: 2px 0; }
+.watermark .wm-label { color: #888; margin-right: 8px; min-width: 60px; }
+.watermark .wm-value { color: #00FFAA; font-weight: bold; }
 </style>
 <div class="dialog" style="display:none;">
   <div class="close" onclick="this.parentNode.style.display='none';"></div>
@@ -273,6 +329,12 @@ el.innerHTML = `<style>
   <div><span class="key">P</span> No Recoil ON/OFF</div>
   <div><span class="key">V</span> TriggerBot ON/OFF</div>
   <div><span class="key">J</span> AutoBhop ON/OFF</div>
+  <h4>Extras</h4>
+  <div><span class="key">X</span> PANIC MODE (Desativa tudo)</div>
+  <div><span class="key">I</span> Mostrar/Ocultar Watermark</div>
+  <div><span class="key">U</span> ESP Health Bars</div>
+  <div><span class="key">Y</span> ESP Distância</div>
+  <div><span class="key">R</span> ESP Nomes</div>
   <div style="text-align:center;color:#aaa;margin-top:10px;">Desenvolvido por zTheMonio</div>
 </div>
 <div class="zui" style="display:none;">
@@ -283,26 +345,75 @@ el.innerHTML = `<style>
 const msgEl = el.querySelector('.gsm7-msg');
 const dialogEl = el.querySelector('.dialog');
 
-window.addEventListener('DOMContentLoaded', function() {
+// Criar watermark
+function createWatermark() {
+    const wm = document.createElement('div');
+    wm.className = 'watermark';
+    wm.innerHTML = `
+        <div class="wm-row"><span class="wm-label">FPS:</span><span class="wm-value" id="wm-fps">0</span></div>
+        <div class="wm-row"><span class="wm-label">Players:</span><span class="wm-value" id="wm-players">0</span></div>
+        <div class="wm-row"><span class="wm-label">Kills:</span><span class="wm-value" id="wm-kills">0</span></div>
+        <div class="wm-row"><span class="wm-label">Status:</span><span class="wm-value" id="wm-status" style="color:#7CFFB2">ATIVO</span></div>
+    `;
+    return wm;
+}
+
+function updateWatermark(playerCount) {
+    if (!watermarkEl) return;
+
+    // Calcular FPS
+    frameCount++;
+    const currentTime = performance.now();
+    if (currentTime - lastFpsTime >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastFpsTime = currentTime;
+    }
+
+    // Atualizar display
+    const fpsEl = document.getElementById('wm-fps');
+    const playersEl = document.getElementById('wm-players');
+    const killsEl = document.getElementById('wm-kills');
+    const statusEl = document.getElementById('wm-status');
+
+    if (fpsEl) fpsEl.textContent = fps;
+    if (playersEl) playersEl.textContent = playerCount;
+    if (killsEl) killsEl.textContent = killCount;
+
+    if (statusEl) {
+        const anyActive = settings.aimbotEnabled || settings.espEnabled || settings.chams || settings.triggerBot;
+        statusEl.textContent = anyActive ? 'ATIVO' : 'INATIVO';
+        statusEl.style.color = anyActive ? '#7CFFB2' : '#FF8C8C';
+    }
+
+    // Mostrar/esconder baseado no setting
+    watermarkEl.style.display = settings.showWatermark ? 'block' : 'none';
+}
+
+window.addEventListener('DOMContentLoaded', function () {
     while (el.children.length > 0) {
         document.body.appendChild(el.children[0]);
     }
     gui.style.display = 'none';
     document.body.appendChild(gui);
     createGuiContent();
+
+    // Criar e adicionar watermark
+    watermarkEl = createWatermark();
+    document.body.appendChild(watermarkEl);
 });
 
-window.addEventListener('pointerdown', function(e) { if (e.button === 2) rightMouseDown = true; });
-window.addEventListener('pointerup', function(e) { if (e.button === 2) rightMouseDown = false; });
+window.addEventListener('pointerdown', function (e) { if (e.button === 2) rightMouseDown = true; });
+window.addEventListener('pointerup', function (e) { if (e.button === 2) rightMouseDown = false; });
 
-window.addEventListener('keydown', function(e) {
+window.addEventListener('keydown', function (e) {
     if (e.code === 'Space') { spaceHeld = true; if (settings.autoBhop) handleBhopState(); }
 });
-window.addEventListener('keyup', function(e) {
+window.addEventListener('keyup', function (e) {
     if (e.code === 'Space') { spaceHeld = false; if (bhopTimer) { clearInterval(bhopTimer); bhopTimer = null; } }
 });
 
-window.addEventListener('keyup', function(event) {
+window.addEventListener('keyup', function (event) {
     if (x.document.activeElement && x.document.activeElement.value !== undefined) return;
 
     if (keyToSetting[event.code]) {
@@ -317,6 +428,9 @@ window.addEventListener('keyup', function(event) {
         case 'KeyH':
             toggleElementVisibility(dialogEl);
             break;
+        case 'KeyX':
+            togglePanicMode();
+            break;
         case 'KeyF':
             if (event.shiftKey) {
                 settings.aimFov = Math.max(10, settings.aimFov - 25);
@@ -324,6 +438,7 @@ window.addEventListener('keyup', function(event) {
                 settings.aimFov = Math.min(1000, settings.aimFov + 25);
             }
             showMsg('Raio Aimbot', settings.aimFov);
+            saveSettings();
             break;
         case 'KeyG':
             if (event.shiftKey) {
@@ -332,16 +447,48 @@ window.addEventListener('keyup', function(event) {
                 settings.aimbotSmoothness = Math.min(1, settings.aimbotSmoothness + 0.05);
             }
             showMsg('Força Aimbot', settings.aimbotSmoothness.toFixed(2));
+            saveSettings();
             break;
         case 'KeyT': {
             const currentIndex = aimbotTargets.indexOf(settings.aimbotTarget);
             const nextIndex = (currentIndex + 1) % aimbotTargets.length;
             settings.aimbotTarget = aimbotTargets[nextIndex];
             showMsg('Alvo Aimbot', settings.aimbotTarget.toUpperCase());
+            saveSettings();
             break;
         }
     }
 });
+
+function togglePanicMode() {
+    settings.panicMode = !settings.panicMode;
+
+    if (settings.panicMode) {
+        // Desativar TODAS as features
+        settings.aimbotEnabled = false;
+        settings.espEnabled = false;
+        settings.espLines = false;
+        settings.espHealth = false;
+        settings.espDistance = false;
+        settings.espNames = false;
+        settings.chams = false;
+        settings.wireframe = false;
+        settings.triggerBot = false;
+        settings.recoilComp = false;
+        settings.autoBhop = false;
+        settings.showWatermark = false;
+
+        // Esconder GUIs
+        if (gui) gui.style.display = 'none';
+        if (typeof watermarkEl !== 'undefined' && watermarkEl) watermarkEl.style.display = 'none';
+
+        showMsg('🚨 PANIC MODE', 'ATIVADO');
+    } else {
+        showMsg('✅ NORMAL MODE', 'ATIVADO');
+    }
+
+    saveSettings();
+}
 
 function toggleElementVisibility(el) {
     const isHidden = el.style.display === 'none' || getComputedStyle(el).display === 'none';
@@ -404,6 +551,7 @@ function createGuiContent() {
                 update();
                 if (typeof value === 'boolean' || typeof value === 'string') showMsg(fromCamel(prop), value);
                 if (prop === 'autoBhop') handleBhopState();
+                saveSettings();
             },
             enumerable: true,
             configurable: true
@@ -421,7 +569,7 @@ function createGUI() {
 		<div class="zui-content"></div>
 	</div>`);
     const headerEl = guiEl.querySelector('.zui-header');
-    headerEl.onclick = function() { guiEl.classList.toggle('open'); };
+    headerEl.onclick = function () { guiEl.classList.toggle('open'); };
     return guiEl;
 }
 
@@ -442,6 +590,7 @@ function toggleSetting(key) {
     const elv = document.getElementById('val_' + key);
     if (elv) elv.innerText = (typeof settings[key] === 'boolean') ? (settings[key] ? 'ON' : 'OFF') : settings[key];
     if (key === 'autoBhop') handleBhopState();
+    saveSettings();
 }
 
 function animate() {
@@ -474,7 +623,7 @@ function animate() {
                 } else {
                     players.push(child);
                 }
-            } catch (err) {}
+            } catch (err) { }
         } else if (child.material) {
             child.material.wireframe = settings.wireframe;
         }
@@ -490,7 +639,7 @@ function animate() {
 
     let counter = 0;
     let targetPlayer;
-    let minDistance = Infinity;
+    let minScreenDistance = Infinity;  // Mudado para distância da tela
 
     tempObject.matrix.copy(myPlayer.matrix).invert()
 
@@ -498,12 +647,12 @@ function animate() {
         const child = scene.children[i];
         if (child.type === 'Object3D') {
             try {
-                if (child.children[0].children[0].type === 'PerspectiveCamera') {} else {
+                if (child.children[0].children[0].type === 'PerspectiveCamera') { } else {
                     if (child.team !== myPlayer.team || !child.ally) {
                         players.push(child);
                     }
                 }
-            } catch (err) {}
+            } catch (err) { }
         }
     }
 
@@ -543,15 +692,39 @@ function animate() {
 
         if (settings.chams) applyChamsToPlayer(player);
         else {
-            try { player.traverse(n => { if (n && n.material) { n.material.depthTest = true; n.material.depthWrite = true; n.material.needsUpdate = true; } }); } catch (e) {}
+            try { player.traverse(n => { if (n && n.material) { n.material.depthTest = true; n.material.depthWrite = true; n.material.needsUpdate = true; } }); } catch (e) { }
         }
 
         const distance = player.position.distanceTo(myPlayer.position);
-        if (distance < minDistance) {
-            targetPlayer = player;
-            minDistance = distance;
+
+        // Priority targeting: mais próximo da MIRA (screenDistance), não distância física
+        if (settings.aimbotEnabled) {
+            try {
+                const camera = myPlayer.children[0].children[0];
+                const screenPos = player.position.clone().project(camera);
+                const screenX = (screenPos.x + 1) / 2 * window.innerWidth;
+                const screenY = (1 - screenPos.y) / 2 * window.innerHeight;
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const screenDist = Math.hypot(screenX - centerX, screenY - centerY);
+
+                // Priorizar quem está mais próximo da mira E dentro do FOV
+                if (screenDist < settings.aimFov && screenDist < minScreenDistance) {
+                    targetPlayer = player;
+                    minScreenDistance = screenDist;
+                }
+            } catch (e) {
+                // Fallback para distância física se projeção falhar
+                if (distance < minScreenDistance) {
+                    targetPlayer = player;
+                    minScreenDistance = distance;
+                }
+            }
         }
     }
+
+    // Atualizar watermark com contagem de players
+    updateWatermark(players.length);
 
     linePositions.needsUpdate = true;
     line.geometry.setDrawRange(0, counter);
@@ -620,11 +793,14 @@ function animate() {
 
     const humanizedSmoothness = settings.aimbotSmoothness * (0.85 + Math.random() * 0.3);
 
-    myPlayer.children[0].rotation.x = lerp(myPlayer.children[0].rotation.x, targetX, humanizedSmoothness);
-    myPlayer.rotation.y += diff * humanizedSmoothness;
+    // Aplicar easing curve para movimento mais natural
+    const easedSmooth = easeOutCubic(humanizedSmoothness);
+
+    myPlayer.children[0].rotation.x = lerp(myPlayer.children[0].rotation.x, targetX, easedSmooth);
+    myPlayer.rotation.y += diff * easedSmooth;
 
     if (settings.recoilComp && rightMouseDown) {
-        try { myPlayer.children[0].rotation.x = myPlayer.children[0].rotation.x * (1 - settings.recoilCompFactor); } catch (e) {}
+        try { myPlayer.children[0].rotation.x = myPlayer.children[0].rotation.x * (1 - settings.recoilCompFactor); } catch (e) { }
     }
 
     if (settings.triggerBot && distance_from_center < settings.triggerThreshold) {
