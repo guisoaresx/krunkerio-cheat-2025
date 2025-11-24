@@ -37,7 +37,7 @@ const settings = {
     recoilComp: false,
     recoilCompFactor: 0.7,
     autoBhop: false,
-    showWatermark: false,
+    showWatermark: true,  // Ativado por padrão
     panicMode: false
 };
 
@@ -144,9 +144,12 @@ const material = new THREE.RawShaderMaterial({
     	`,
     fragmentShader: `
     	void main() {
-    		gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );
+    		gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );  // Vermelho
     	}
-    	`
+    	`,
+    depthTest: false,
+    depthWrite: false,
+    transparent: false
 });
 
 const line = new THREE.LineSegments(new THREE.BufferGeometry(), material.clone());
@@ -361,33 +364,37 @@ function createWatermark() {
 function updateWatermark(playerCount) {
     if (!watermarkEl) return;
 
-    // Calcular FPS
-    frameCount++;
-    const currentTime = performance.now();
-    if (currentTime - lastFpsTime >= 1000) {
-        fps = frameCount;
-        frameCount = 0;
-        lastFpsTime = currentTime;
+    try {
+        // Calcular FPS
+        frameCount++;
+        const currentTime = performance.now();
+        if (currentTime - lastFpsTime >= 1000) {
+            fps = frameCount;
+            frameCount = 0;
+            lastFpsTime = currentTime;
+        }
+
+        // Atualizar display com safe checks
+        const fpsEl = document.getElementById('wm-fps');
+        const playersEl = document.getElementById('wm-players');
+        const killsEl = document.getElementById('wm-kills');
+        const statusEl = document.getElementById('wm-status');
+
+        if (fpsEl) fpsEl.textContent = fps || 0;
+        if (playersEl) playersEl.textContent = playerCount || 0;
+        if (killsEl) killsEl.textContent = killCount || 0;
+
+        if (statusEl) {
+            const anyActive = settings.aimbotEnabled || settings.espEnabled || settings.chams || settings.triggerBot;
+            statusEl.textContent = anyActive ? 'ATIVO' : 'INATIVO';
+            statusEl.style.color = anyActive ? '#7CFFB2' : '#FF8C8C';
+        }
+
+        // Mostrar/esconder baseado no setting
+        watermarkEl.style.display = settings.showWatermark ? 'block' : 'none';
+    } catch (e) {
+        // Silenciosamente ignorar erros no watermark
     }
-
-    // Atualizar display
-    const fpsEl = document.getElementById('wm-fps');
-    const playersEl = document.getElementById('wm-players');
-    const killsEl = document.getElementById('wm-kills');
-    const statusEl = document.getElementById('wm-status');
-
-    if (fpsEl) fpsEl.textContent = fps;
-    if (playersEl) playersEl.textContent = playerCount;
-    if (killsEl) killsEl.textContent = killCount;
-
-    if (statusEl) {
-        const anyActive = settings.aimbotEnabled || settings.espEnabled || settings.chams || settings.triggerBot;
-        statusEl.textContent = anyActive ? 'ATIVO' : 'INATIVO';
-        statusEl.style.color = anyActive ? '#7CFFB2' : '#FF8C8C';
-    }
-
-    // Mostrar/esconder baseado no setting
-    watermarkEl.style.display = settings.showWatermark ? 'block' : 'none';
 }
 
 window.addEventListener('DOMContentLoaded', function () {
@@ -723,8 +730,16 @@ function animate() {
         }
     }
 
-    // Atualizar watermark com contagem de players
-    updateWatermark(players.length);
+    // Atualizar watermark com contagem de players (com safe check)
+    try {
+        if (players && Array.isArray(players)) {
+            updateWatermark(players.length);
+        } else {
+            updateWatermark(0);
+        }
+    } catch (e) {
+        // Silenciosamente ignorar erros de watermark
+    }
 
     linePositions.needsUpdate = true;
     line.geometry.setDrawRange(0, counter);
